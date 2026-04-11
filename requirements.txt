@@ -1,0 +1,14 @@
+streamlit
+openai
+PyMuPDF
+sentence-transformers
+faiss-cpu
+numpy
+pandas
+python-docx
+pdf2image
+pytesseract
+opencv-python-headless
+pillow
+datasets>=2.14.7
+torchvision

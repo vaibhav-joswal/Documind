@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+
+# Environment Variables
+.env
+
+# IDEs
+.idea/
+.vscode/
+.zencoder/
+.zenflow/
+
+# App Caches
+cache/
+doc_cache/
+
+# System
+desktop.ini
+Thumbs.db
