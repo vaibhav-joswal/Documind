@@ -9,7 +9,7 @@ from datetime import datetime
 
 # ---------------- CONFIG ----------------
 # Put your HF_ROUTER API key here or set env var HF_API_KEY
-HF_API_KEY = os.getenv("HF_API_KEY") 
+HF_API_KEY = os.getenv("HF_API_KEY", "your_huggingface_api_key_here") 
 DOC_CACHE_DIR = "./doc_cache"  # Changed from pdf_cache to doc_cache
 Path(DOC_CACHE_DIR).mkdir(exist_ok=True)
 
@@ -284,7 +284,7 @@ with st.sidebar:
             try:
                 with st.spinner("Processing documents (this can take a moment)..."):
                     rag_system = OptimizedMultiDocRAG(
-                        model_name="all-MiniLM-L6-v2",
+                        model_name="sentence-transformers/all-MiniLM-L6-v2",
                         cache_dir=DOC_CACHE_DIR,
                         max_words=150,
                         overlap=30,

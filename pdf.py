@@ -1,6 +1,6 @@
 # multi_doc_rag.py
 import fitz  # PyMuPDF
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 import faiss
 import numpy as np
 import openai
@@ -21,7 +21,7 @@ import cv2
 from PIL import Image
 import time
 
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+# pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe" # Removed for Linux/Docker environment
 
 
 
@@ -38,7 +38,7 @@ class DocumentChunk:
     doc_type: str = ""
 
 class OptimizedMultiDocRAG:
-    def __init__(self, model_name='all-MiniLM-L6-v2', cache_dir="./cache", max_words=150, overlap=30):
+    def __init__(self, model_name='sentence-transformers/all-MiniLM-L6-v2', cache_dir="./cache", max_words=150, overlap=30):
         self.model_name = model_name
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(exist_ok=True)
@@ -48,16 +48,29 @@ class OptimizedMultiDocRAG:
         self._index = None
         self.document_chunks = []
 
+        # HuggingFace API key (Only used for the LLM now, NOT embeddings)
+        self.hf_api_key = os.getenv("HF_API_KEY", "your_huggingface_api_key_here")
+
         # OpenAI client (via HuggingFace router)
         self.client = openai.OpenAI(
             base_url="https://router.huggingface.co/v1",
-            api_key=os.getenv("HF_API_KEY")
+            api_key=self.hf_api_key
         )
+        
+        self.embedding_dim = 384  # all-MiniLM-L6-v2 output dimension
 
         # Supported file types
         self.supported_extensions = {'.pdf', '.docx', '.doc', '.txt', '.csv'}
+
+    @property
+    def model(self):
+        if self._model is None:
+            logger.info(f"Loading FastEmbed model: {self.model_name}")
+            self._model = TextEmbedding(model_name=self.model_name)
+        return self._model
+
     def print_system_stats(self):
-        embedding_size = self.model.get_sentence_embedding_dimension()
+        embedding_size = self.embedding_dim
         index_type = type(self._index).__name__ if self._index else "Index not built yet"
         distance_metric = "L2 Norm"
         top_k = "3–5"
@@ -65,19 +78,12 @@ class OptimizedMultiDocRAG:
 
         print("\n===== RAG System Configuration =====")
         print(f"Embedding Size     : {embedding_size}")
+        print(f"Embedding Source   : FastEmbed (Local ONNX, No PyTorch)")
         print(f"FAISS Index Type   : {index_type}")
         print(f"Distance Metric    : {distance_metric}")
         print(f"Top-k Retrieved    : {top_k}")
         print(f"Search Time        : {search_time}")
         print("====================================\n")
-
-
-    @property
-    def model(self):
-        if self._model is None:
-            logger.info(f"Loading model: {self.model_name}")
-            self._model = SentenceTransformer(self.model_name)
-        return self._model
 
     def _get_file_hash(self, file_path):
         with open(file_path, 'rb') as f:
@@ -139,7 +145,7 @@ class OptimizedMultiDocRAG:
         # Step 2: If no text found → run OCR
         if not text.strip():
             print("📷 Running OCR on scanned PDF...")
-            pages = convert_from_path(pdf_path,poppler_path=r"C:\Users\tikuj\Downloads\Release-25.07.0-0\poppler-25.07.0\Library\bin")
+            pages = convert_from_path(pdf_path) # Removed poppler_path for Linux environment
             for page_num, page in enumerate(pages, start=1):
                 clean_img = self._preprocess_image(page)
                 ocr_text = pytesseract.image_to_string(clean_img, lang="eng")
@@ -337,7 +343,8 @@ class OptimizedMultiDocRAG:
         embeddings = []
         for i in range(0, len(texts), batch_size):
             batch_texts = texts[i:i + batch_size]
-            batch_embeddings = self.model.encode(batch_texts, show_progress_bar=False)
+            # FastEmbed's .embed() yields an iterable of numpy arrays
+            batch_embeddings = list(self.model.embed(batch_texts))
             embeddings.append(batch_embeddings)
             
         return np.vstack(embeddings)
@@ -353,8 +360,8 @@ class OptimizedMultiDocRAG:
         if not self._index or not self.document_chunks:
             raise ValueError("Index not built. Process documents first.")
 
-        query_embedding = self.model.encode([query])
-        distances, indices = self._index.search(np.array(query_embedding).astype("float32"), top_k)
+        query_embedding = list(self.model.embed([query]))[0]
+        distances, indices = self._index.search(np.array([query_embedding]).astype("float32"), top_k)
         similarities = np.exp(-distances[0])
 
         results = []

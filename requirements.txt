@@ -1,7 +1,6 @@
 streamlit
 openai
 PyMuPDF
-sentence-transformers
 faiss-cpu
 numpy
 pandas
@@ -10,5 +9,4 @@ pdf2image
 pytesseract
 opencv-python-headless
 pillow
-datasets>=2.14.7
-torchvision
+fastembed
